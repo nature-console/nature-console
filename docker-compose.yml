@@ -1,0 +1,82 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/nature_console_dev?sslmode=disable
+      - PORT=8080
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - nature-console-network
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=nature_console_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nature-console-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  test-db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=nature_console_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    networks:
+      - nature-console-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - test
+    restart: unless-stopped
+
+  test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    environment:
+      - TEST_DATABASE_URL=postgres://postgres:password@test-db:5432/nature_console_test?sslmode=disable
+    depends_on:
+      test-db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - nature-console-network
+    profiles:
+      - test
+
+volumes:
+  postgres_data:
+  test_postgres_data:
+
+networks:
+  nature-console-network:
+    driver: bridge
