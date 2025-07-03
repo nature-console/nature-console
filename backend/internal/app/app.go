@@ -2,6 +2,8 @@ package app
 
 import (
 	"log"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nature-console/backend/internal/config"
@@ -13,7 +15,7 @@ import (
 	adminUserRepo "github.com/nature-console/backend/internal/repository/admin_user"
 	articleRepo "github.com/nature-console/backend/internal/repository/article"
 	"github.com/nature-console/backend/internal/routes"
-	"github.com/nature-console/backend/internal/seed"
+	"github.com/nature-console/backend/pkg/seed"
 	articleUC "github.com/nature-console/backend/internal/usecase/article"
 	authUC "github.com/nature-console/backend/internal/usecase/auth"
 	"github.com/nature-console/backend/pkg/database"
@@ -65,12 +67,15 @@ func (a *App) initialize() error {
 		return err
 	}
 
-	// Run seeds
-	if err := seed.RunSeeds(a.database.DB, a.config.Auth); err != nil {
-		return err
+	// Run seeds only if enabled via environment variable
+	if a.shouldRunSeeds() {
+		if err := a.runSeeds(); err != nil {
+			return err
+		}
+		log.Println("Database connected, migrated, and seeded successfully")
+	} else {
+		log.Println("Database connected and migrated successfully")
 	}
-
-	log.Println("Database connected, migrated, and seeded successfully")
 
 	// Setup dependencies
 	a.setupDependencies()
@@ -151,6 +156,47 @@ func (a *App) healthCheck(c *gin.Context) {
 func (a *App) Run() error {
 	log.Printf("Server starting on port %s", a.config.Server.Port)
 	return a.router.Run(":" + a.config.Server.Port)
+}
+
+// shouldRunSeeds determines if seeds should be run based on environment variables
+func (a *App) shouldRunSeeds() bool {
+	// Check various environment variables that indicate seeding should occur
+	runSeeds := os.Getenv("RUN_SEEDS")
+	autoSeed := os.Getenv("AUTO_SEED")
+	env := os.Getenv("ENV")
+	ginMode := os.Getenv("GIN_MODE")
+
+	// Run seeds if explicitly requested
+	if strings.ToLower(runSeeds) == "true" || strings.ToLower(autoSeed) == "true" {
+		return true
+	}
+
+	// Run seeds in development environment by default
+	if env == "development" || env == "dev" || ginMode == "debug" {
+		// Check if explicitly disabled
+		if strings.ToLower(runSeeds) == "false" || strings.ToLower(autoSeed) == "false" {
+			return false
+		}
+		return true
+	}
+
+	// Don't run seeds in production by default
+	return false
+}
+
+// runSeeds executes the appropriate seeding strategy based on environment
+func (a *App) runSeeds() error {
+	env := os.Getenv("ENV")
+	seedMode := os.Getenv("SEED_MODE")
+
+	// Determine seeding mode
+	if env == "production" || env == "prod" || seedMode == "production" {
+		log.Println("Running production seeds (admin users only)...")
+		return seed.RunSeedsForProduction(a.database.DB, a.config.Auth)
+	}
+
+	log.Println("Running development seeds (admin users + sample data)...")
+	return seed.RunSeeds(a.database.DB, a.config.Auth)
 }
 
 // Close gracefully shuts down the application

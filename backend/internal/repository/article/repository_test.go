@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 	"github.com/nature-console/backend/internal/domain/entity"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 

@@ -8,6 +8,11 @@ services:
     environment:
       - DATABASE_URL=postgres://postgres:password@db:5432/nature_console_dev?sslmode=disable
       - PORT=8080
+      - ENV=development
+      - RUN_SEEDS=true
+      - SEED_MODE=development
+      - ADMIN_EMAIL=admin@nature-console.local
+      - ADMIN_PASSWORD=admin123
     depends_on:
       db:
         condition: service_healthy
@@ -16,6 +21,8 @@ services:
     networks:
       - nature-console-network
     restart: unless-stopped
+    profiles:
+      - dev
 
   db:
     image: postgres:15
@@ -35,6 +42,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    profiles:
+      - dev
 
   test-db:
     image: postgres:15
